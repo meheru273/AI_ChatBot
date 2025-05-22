@@ -19,12 +19,12 @@ from langchain_community.utilities import ArxivAPIWrapper, WikipediaAPIWrapper
 from langchain_community.tools import ArxivQueryRun, WikipediaQueryRun
 from langgraph.prebuilt import ToolNode, tools_condition
 import asyncio
-
 from server import app
 
 
 # Load environment variables
 load_dotenv()
+
 
 # Set up tools
 arvix_wrapper = ArxivAPIWrapper(top_k_results=1, doc_content_chars_max=300)
@@ -136,5 +136,5 @@ async def chat_post(request: Request):
 # Run the app
 if __name__ == "__main__":
     import uvicorn
-    print("Starting server at http://127.0.0.1:8000")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
