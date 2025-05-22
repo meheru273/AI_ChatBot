@@ -19,7 +19,7 @@ from langchain_community.utilities import ArxivAPIWrapper, WikipediaAPIWrapper
 from langchain_community.tools import ArxivQueryRun, WikipediaQueryRun
 from langgraph.prebuilt import ToolNode, tools_condition
 import asyncio
-from server import app
+
 
 
 # Load environment variables
