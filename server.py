@@ -26,10 +26,6 @@ from server import app
 # Load environment variables
 load_dotenv()
 
-# Set the API key directly if not in environment
-if "GROQ_API_KEY" not in os.environ:
-    os.environ["GROQ_API_KEY"] = "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"
-
 # Set up tools
 arvix_wrapper = ArxivAPIWrapper(top_k_results=1, doc_content_chars_max=300)
 arvix_tool = ArxivQueryRun(api_wrapper=arvix_wrapper)
