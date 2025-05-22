@@ -25,7 +25,7 @@ function App() {
     
     try {
       // Send message to server
-      const response = await fetch("https://ai-chat-bot-ten-delta.vercel.app/", {
+      const response = await fetch("https://ai-chat-bot-ten-delta.vercel.app/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
