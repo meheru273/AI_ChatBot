@@ -170,6 +170,32 @@ Tools that cannot work say so in their return value, which the model can relay.
 **Rationale.** A service answering half its questions beats one that will not start,
 and the health endpoint makes the degradation legible.
 
+### DR-9 — Model choice, and retrying malformed tool calls
+
+**Context.** The project was built on Groq's `Gemma2-9b-It`. Groq has since
+decommissioned it — the API returns `model_decommissioned` — so the original code
+could no longer run at all.
+
+**Decision.** `llama-3.3-70b-versatile`, Groq's flagship tool-calling model. Gemma2
+was weak at function calling regardless, and this agent routes across seven tools
+under safety-sensitive rules, so tool-call reliability is the binding constraint.
+
+**The problem this surfaced.** Llama 3.3 intermittently emits its *native* function
+syntax instead of the JSON Groq's parser expects:
+
+```
+failed_generation: '<function=search_menu{"query": "bibimbap"}</function>'
+```
+
+Groq rejects this with `tool_use_failed` and a 400. Note the arguments are correct —
+only the wrapper is wrong. Measured at roughly one failure in three, on both
+streaming and buffered calls, so it is model behaviour rather than a client bug.
+
+**Mitigation.** The agent node retries up to twice on this specific error. Sampling
+temperature is non-zero, so a retry genuinely resamples. Every *other* exception —
+a bad key, a decommissioned model, a rate limit — fails on the first attempt, so a
+permanent fault is never disguised as three slow ones.
+
 ---
 
 ## 4. Retrieval pipeline

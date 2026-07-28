@@ -26,7 +26,7 @@ So the agent has both paths and chooses.
 chat-ui (React 19)
    │  POST /chat/stream    Server-Sent Events
    ▼
-FastAPI  ──  LangGraph agent  ──▶  ChatGroq (Gemma2-9b-It)
+FastAPI  ──  LangGraph agent  ──▶  ChatGroq (llama-3.3-70b-versatile)
                     │
        ┌────────────┼──────────────┬──────────────────┐
        ▼            ▼              ▼                  ▼
@@ -52,14 +52,16 @@ similarity.
 
 ### Pluggable embeddings
 
-| `EMBEDDING_PROVIDER` | Model | Notes |
-|---|---|---|
-| `voyage` *(default)* | `voyage-3-lite` | Free tier, no card. MongoDB's own embedding provider since their 2025 acquisition |
-| `openai` | `text-embedding-3-small` | Paid; needs `OPENAI_API_KEY` |
-| `local` | `all-MiniLM-L6-v2` | Free and offline, but installs torch (~2 GB) — not viable on serverless or small instances |
+| `EMBEDDING_PROVIDER` | Model | Dim | Notes |
+|---|---|---|---|
+| `jina` *(default)* | `jina-embeddings-v3` | 1024 | Free tier, no card, usable rate limit |
+| `voyage` | `voyage-3-lite` | 512 | MongoDB's own provider; free tier is 3 req/min without a card |
+| `openai` | `text-embedding-3-small` | 1536 | Paid |
+| `local` | `all-MiniLM-L6-v2` | 384 | Offline, but installs torch (~2 GB) — not viable on serverless or small instances |
 
-Voyage encodes passages and queries asymmetrically (`input_type=document` vs
-`query`), which the provider uses on each side.
+Both hosted providers encode passages and queries **asymmetrically** — Jina via
+`task=retrieval.passage` / `retrieval.query`, Voyage via `input_type`. They share a
+REST base class, so adding another is a request-body method.
 
 The index records the provider, model and dimension it was built with. Loading it
 under a different configuration raises a clear "rebuild the index" error instead of
@@ -103,7 +105,7 @@ The API URL comes from `REACT_APP_API_URL` (`chat-ui/.env.development`,
 ### Tests
 
 ```bash
-cd server && pytest        # 87 tests
+cd server && pytest        # 115 tests
 cd chat-ui && npm test
 ```
 
@@ -178,5 +180,6 @@ on every cold start.
 
 ## Tech
 
-LangGraph · LangChain · Groq · FAISS · OpenAI / sentence-transformers embeddings ·
-FastAPI · sse-starlette · MongoDB (Motor) · React 19 · pytest
+LangGraph · LangChain · Groq (`llama-3.3-70b-versatile`) · FAISS · Jina / Voyage /
+OpenAI / sentence-transformers embeddings · FastAPI · sse-starlette ·
+MongoDB (Motor) · React 19 · pytest

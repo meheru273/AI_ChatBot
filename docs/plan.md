@@ -13,7 +13,7 @@ codebase, streaming API, and an integration test suite.
 | Component | Current state |
 |---|---|
 | Agent | LangGraph `StateGraph` + `ToolNode` + `tools_condition` — works, keep the pattern |
-| LLM | Groq `Gemma2-9b-It` |
+| LLM | Groq `Gemma2-9b-It` (since decommissioned by Groq — see architecture.md DR-9) |
 | Tools | Wikipedia; a Postgres menu lookup (`ILIKE '%term%'`) |
 | Retrieval | **None.** No embeddings, no vector store, no chunking |
 | API | FastAPI, single `POST /chat` returning one JSON blob — no streaming |
@@ -318,7 +318,7 @@ providers.
 ```bash
 # LLM
 GROQ_API_KEY=
-GROQ_MODEL=Gemma2-9b-It
+GROQ_MODEL=llama-3.3-70b-versatile
 
 # Embeddings — "openai" or "local"
 EMBEDDING_PROVIDER=openai

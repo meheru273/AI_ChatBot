@@ -13,6 +13,7 @@ import pytest
 
 from app.config import Settings
 from app.rag.embeddings import (
+    JinaEmbeddingProvider,
     VoyageEmbeddingProvider,
     build_embedding_provider,
 )
@@ -58,6 +59,35 @@ def test_voyage_marks_documents_and_queries_differently(captured_posts):
 
     assert captured_posts[0]["body"]["input_type"] == "document"
     assert captured_posts[1]["body"]["input_type"] == "query"
+
+
+def test_jina_marks_passages_and_queries_differently(captured_posts):
+    """jina-embeddings-v3 takes a `task`, not Voyage's `input_type`."""
+    provider = JinaEmbeddingProvider(api_key="k", model="jina-embeddings-v3")
+
+    provider.embed_documents(["a passage"])
+    provider.embed_query("a question")
+
+    assert captured_posts[0]["body"]["task"] == "retrieval.passage"
+    assert captured_posts[1]["body"]["task"] == "retrieval.query"
+
+
+def test_jina_and_voyage_hit_their_own_endpoints(captured_posts):
+    JinaEmbeddingProvider(api_key="k", model="m").embed_query("x")
+    VoyageEmbeddingProvider(api_key="k", model="m").embed_query("x")
+
+    assert captured_posts[0]["url"] == "https://api.jina.ai/v1/embeddings"
+    assert captured_posts[1]["url"] == "https://api.voyageai.com/v1/embeddings"
+
+
+def test_error_message_names_the_failing_provider(monkeypatch):
+    monkeypatch.setattr(
+        "httpx.post",
+        lambda *a, **kw: FakeResponse({"detail": "rate limited"}, status_code=429),
+    )
+
+    with pytest.raises(RuntimeError, match="jina"):
+        JinaEmbeddingProvider(api_key="k", model="m").embed_query("x")
 
 
 def test_voyage_sends_the_api_key_as_a_bearer_token(captured_posts):
@@ -146,14 +176,21 @@ def _settings(**overrides) -> Settings:
     base = {
         "groq_api_key": "g",
         "mongo_uri": "mongodb://localhost:27017",
-        "embedding_provider": "voyage",
-        "voyage_api_key": "v",
+        "embedding_provider": "jina",
+        "jina_api_key": "j",
     }
     return Settings(**{**base, **overrides})
 
 
-def test_factory_selects_voyage():
+def test_factory_selects_jina():
     provider = build_embedding_provider(_settings())
+    assert provider.identity == ("jina", "jina-embeddings-v3")
+
+
+def test_factory_selects_voyage():
+    provider = build_embedding_provider(
+        _settings(embedding_provider="voyage", voyage_api_key="v")
+    )
     assert provider.identity == ("voyage", "voyage-3-lite")
 
 
@@ -166,7 +203,11 @@ def test_factory_selects_openai():
 
 @pytest.mark.parametrize(
     ("provider", "missing_key"),
-    [("voyage", "VOYAGE_API_KEY"), ("openai", "OPENAI_API_KEY")],
+    [
+        ("jina", "JINA_API_KEY"),
+        ("voyage", "VOYAGE_API_KEY"),
+        ("openai", "OPENAI_API_KEY"),
+    ],
 )
 def test_hosted_providers_require_their_key(provider, missing_key):
     """Fail at startup, not on the first user question."""
@@ -175,11 +216,12 @@ def test_hosted_providers_require_their_key(provider, missing_key):
             groq_api_key="g",
             mongo_uri="mongodb://localhost:27017",
             embedding_provider=provider,
+            jina_api_key=None,
             voyage_api_key=None,
             openai_api_key=None,
         )
 
 
 def test_local_provider_needs_no_key():
-    settings = _settings(embedding_provider="local", voyage_api_key=None)
+    settings = _settings(embedding_provider="local", jina_api_key=None)
     assert settings.embedding_provider == "local"

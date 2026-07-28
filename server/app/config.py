@@ -32,15 +32,18 @@ class Settings(BaseSettings):
 
     # ---- LLM ----
     groq_api_key: str
-    groq_model: str = "Gemma2-9b-It"
+    groq_model: str = "llama-3.3-70b-versatile"
     llm_temperature: float = 0.3
 
     # ---- Embeddings ----
-    # "voyage" -> hosted, free tier, MongoDB's own embedding provider.
+    # "jina"   -> hosted, free tier with a usable rate limit. Default.
+    # "voyage" -> hosted, free tier, but 3 req/min without a card on file.
     # "openai" -> hosted, paid.
     # "local"  -> sentence-transformers, offline, pulls in torch (~2GB).
     #             Not viable on serverless or on small instances.
-    embedding_provider: Literal["voyage", "openai", "local"] = "voyage"
+    embedding_provider: Literal["jina", "voyage", "openai", "local"] = "jina"
+    jina_api_key: str | None = None
+    jina_embedding_model: str = "jina-embeddings-v3"
     voyage_api_key: str | None = None
     voyage_embedding_model: str = "voyage-3-lite"
     openai_api_key: str | None = None
@@ -105,6 +108,7 @@ class Settings(BaseSettings):
     def _require_key_for_hosted_provider(self) -> Settings:
         """Fail at startup rather than on the first user question."""
         required = {
+            "jina": ("JINA_API_KEY", self.jina_api_key),
             "voyage": ("VOYAGE_API_KEY", self.voyage_api_key),
             "openai": ("OPENAI_API_KEY", self.openai_api_key),
         }

@@ -29,17 +29,19 @@ services:
       - key: GROQ_API_KEY
         sync: false
       - key: GROQ_MODEL
-        value: Gemma2-9b-It
+        value: llama-3.3-70b-versatile
 
       # ---- Embeddings ----
       # Hosted, because sentence-transformers needs torch and the free plan
-      # has 512 MB of RAM.
+      # has 512 MB of RAM. Jina rather than Voyage: Voyage's free tier is
+      # capped at 3 requests/minute without a card, and every user question
+      # costs one embedding call.
       - key: EMBEDDING_PROVIDER
-        value: voyage
-      - key: VOYAGE_API_KEY
+        value: jina
+      - key: JINA_API_KEY
         sync: false
-      - key: VOYAGE_EMBEDDING_MODEL
-        value: voyage-3-lite
+      - key: JINA_EMBEDDING_MODEL
+        value: jina-embeddings-v3
 
       # ---- Database ----
       - key: MONGODB_URI

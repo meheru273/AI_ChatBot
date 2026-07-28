@@ -12,20 +12,23 @@ which is exactly what Vercel is best at.
 
 ## 0. Prerequisites
 
-### Get a Voyage API key (free, no card)
+### Get a Jina API key (free, no card)
 
-1. Sign up at <https://dashboard.voyageai.com>
-2. Create an API key — it starts with `pa-`
-3. Free tier is 200M tokens. This project uses roughly 20k tokens to build the index
-   and ~10 tokens per question, so you will not approach the limit.
+1. Get a key at <https://jina.ai/embeddings> — it starts with `jina_`
+2. The free tier's rate limit is high enough for a live demo.
+
+> **Why not Voyage?** Voyage gives 200M free tokens, but until a payment method is
+> on file it throttles to **3 requests per minute**. Every user question costs one
+> embedding call, so a demo would start returning 429s the moment anyone used it.
+> Voyage remains supported — set `EMBEDDING_PROVIDER=voyage` if you add a card.
 
 ### Add it locally and build the index
 
 Add to your root `.env`:
 
 ```bash
-VOYAGE_API_KEY=pa-your_key_here
-EMBEDDING_PROVIDER=voyage
+JINA_API_KEY=jina_your_key_here
+EMBEDDING_PROVIDER=jina
 MONGO_DB=menu
 ```
 
@@ -38,29 +41,25 @@ python -m scripts.build_index             # real build, ~20k tokens
 uvicorn app.main:app --reload
 ```
 
-`GET /health` should report `index_loaded: true` and a chunk count of about 61.
+`GET /health` should report `index_loaded: true` and a chunk count of 61.
 
-> **Not yet verified:** the Voyage request/response handling is covered by unit tests
-> with a stubbed transport, but no real Voyage call has been made. The first real
-> `build_index` run is what confirms it. If `voyage-3-lite` reports an unexpected
-> dimension, the build fails loudly with a clear message rather than corrupting the
-> index.
+Both hosted providers have been verified against their real APIs — Jina at 1024
+dimensions, Voyage at 512, each producing a working 61-chunk index.
 
 ---
 
 ## 1. Push to GitHub
 
-History has been rewritten to purge the leaked Groq key, so this needs `--force`:
+History was rewritten once to purge the leaked Groq key, which required a
+`--force` push. That is done; subsequent pushes are ordinary:
 
 ```bash
-git push --force -u origin main
+git push origin main
 ```
 
-A backup of the pre-rewrite history is at `../RAG_Application-backup-20260729.bundle`.
-Restore with `git clone RAG_Application-backup-20260729.bundle` if anything goes wrong.
-
-Because history changed, any existing clone of this repo is now incompatible and
-should be re-cloned rather than pulled.
+A backup of the pre-rewrite history is at `../RAG_Application-backup-20260729.bundle`
+(`git clone` it to recover). Because history changed, any clone taken before the
+rewrite is incompatible and should be re-cloned rather than pulled.
 
 ---
 
@@ -76,7 +75,7 @@ should be re-cloned rather than pulled.
 | Variable | Value |
 |---|---|
 | `GROQ_API_KEY` | your rotated Groq key |
-| `VOYAGE_API_KEY` | the `pa-...` key from step 0 |
+| `JINA_API_KEY` | the `jina_...` key from step 0 |
 | `MONGODB_URI` | your Atlas connection string |
 | `CORS_ORIGINS` | leave as `http://localhost:3000` for now; corrected in step 4 |
 
@@ -105,8 +104,8 @@ The build takes 3–5 minutes; the index build runs at the end and should log
 curl https://banchan-rag-assistant.onrender.com/health
 ```
 
-Expect `mongo_connected: true`, `index_loaded: true`, `embedding_provider:
-voyage/voyage-3-lite (...)`.
+Expect `mongo_connected: true`, `index_loaded: true`, `index_chunks: 61`, and
+`embedding_provider: jina/jina-embeddings-v3 (1024d)`.
 
 Note the service URL — you need it next.
 
@@ -174,7 +173,7 @@ I'd do option 1.
 the Vercel origin. Check for a trailing slash or `http` vs `https`.
 
 **`index_loaded: false`.** The build-time index step failed — check the Render build
-log for the `build_index` output. Usually a bad `VOYAGE_API_KEY` or an unreachable
+log for the `build_index` output. Usually a bad `JINA_API_KEY` or an unreachable
 Atlas cluster.
 
 **`mongo_connected: false`.** Atlas Network Access is probably blocking Render. Add
@@ -191,10 +190,8 @@ to respect that.
 
 ## Still outstanding
 
-1. **Create a read-only Atlas user.** The assistant currently connects with whatever
-   credentials are in your `.env`. A chatbot should not hold write access to live
-   restaurant data — create a user with `read` on the `menu` database only, and use
-   that URI in Render.
-2. **Decommission the old Postgres database.** `DATABASE_URL` is still in your local
-   `.env` and its credentials were exposed in git history. Nothing in the code uses
-   it anymore.
+1. **Decommission the old Postgres database.** `DATABASE_URL` is still in your local
+   `.env` and its credentials were exposed in the pre-rewrite git history. Nothing in
+   the code uses it anymore.
+2. **Rotate the xAI key** that was briefly set as `GROQ_API_KEY`. It is no longer in
+   the repo, but it was exposed.

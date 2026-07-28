@@ -79,9 +79,12 @@ def test_mongo_database_defaults_to_the_menu_service_database(monkeypatch):
     assert _settings().mongo_db == "menu"
 
 
-@pytest.mark.parametrize("provider", ["voyage", "openai"])
+@pytest.mark.parametrize("provider", ["jina", "voyage", "openai"])
 def test_hosted_provider_without_a_key_fails_fast(provider):
     with pytest.raises(ValueError, match="API_KEY"):
         _settings(
-            embedding_provider=provider, voyage_api_key=None, openai_api_key=None
+            embedding_provider=provider,
+            jina_api_key=None,
+            voyage_api_key=None,
+            openai_api_key=None,
         )

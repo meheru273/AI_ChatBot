@@ -1,8 +1,9 @@
 """Pluggable embedding providers.
 
-Three backends behind one interface, selected by `EMBEDDING_PROVIDER`:
+Four backends behind one interface, selected by `EMBEDDING_PROVIDER`:
 
-    voyage  voyage-3-lite            hosted, free tier, MongoDB's own provider
+    jina    jina-embeddings-v3       hosted, free tier, usable rate limit
+    voyage  voyage-3-lite            hosted, free tier, 3 req/min without a card
     openai  text-embedding-3-small   hosted, paid
     local   all-MiniLM-L6-v2         offline, installs torch (~2GB)
 
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 # Unlisted models are measured once on first use.
 _KNOWN_DIMENSIONS = {
     "voyage-3-lite": 512,
+    "jina-embeddings-v3": 1024,
     "text-embedding-3-small": 1536,
     "text-embedding-3-large": 3072,
     "text-embedding-ada-002": 1536,
@@ -100,27 +102,31 @@ class EmbeddingProvider(ABC):
         """Embed a single search query."""
 
 
-class VoyageEmbeddingProvider(EmbeddingProvider):
-    """Voyage AI over plain REST.
+class RestEmbeddingProvider(EmbeddingProvider):
+    """Shared implementation for hosted providers with an OpenAI-shaped API.
 
-    Called with httpx rather than the `voyageai` SDK to keep the serverless
-    bundle small — httpx is already a dependency.
+    Called with httpx rather than each vendor's SDK: the request is a dozen
+    lines, httpx is already a dependency, and it avoids two more packages in
+    the deployment.
 
-    Voyage distinguishes `document` from `query` inputs and encodes them
-    differently; using the right one on each side measurably improves
-    retrieval over treating both symmetrically.
+    Both Voyage and Jina encode passages and queries *asymmetrically* — the
+    same text embeds differently depending on which side of the search it is
+    on. Using the correct marker on each side is worth real retrieval quality,
+    so `_payload` takes an `is_query` flag rather than treating both alike.
     """
 
-    provider_name = "voyage"
-    API_URL = "https://api.voyageai.com/v1/embeddings"
-    # Voyage caps documents per request; batch well under the limit.
-    BATCH_SIZE = 96
+    API_URL: str = ""
+    BATCH_SIZE: int = 96
 
     def __init__(self, api_key: str, model: str) -> None:
         super().__init__(model)
         self._api_key = api_key
 
-    def _post(self, texts: list[str], input_type: str) -> list[list[float]]:
+    def _payload(self, texts: list[str], is_query: bool) -> dict:
+        """Vendor-specific request body."""
+        raise NotImplementedError
+
+    def _post(self, texts: list[str], is_query: bool) -> list[list[float]]:
         import httpx
 
         response = httpx.post(
@@ -129,17 +135,19 @@ class VoyageEmbeddingProvider(EmbeddingProvider):
                 "Authorization": f"Bearer {self._api_key}",
                 "Content-Type": "application/json",
             },
-            json={"input": texts, "model": self._model_name, "input_type": input_type},
+            json=self._payload(texts, is_query),
             timeout=30.0,
         )
 
         if response.status_code != 200:
             raise RuntimeError(
-                f"Voyage embeddings failed ({response.status_code}): {response.text}"
+                f"{self.provider_name} embeddings failed "
+                f"({response.status_code}): {response.text}"
             )
 
         payload = response.json()
-        # The API does not guarantee ordering, so sort by the echoed index.
+        # Ordering is not guaranteed, so sort by the echoed index. Skipping
+        # this would silently attach embeddings to the wrong chunks.
         rows = sorted(payload["data"], key=lambda row: row["index"])
         return [row["embedding"] for row in rows]
 
@@ -147,12 +155,49 @@ class VoyageEmbeddingProvider(EmbeddingProvider):
         vectors: list[list[float]] = []
         for start in range(0, len(texts), self.BATCH_SIZE):
             vectors.extend(
-                self._post(texts[start : start + self.BATCH_SIZE], "document")
+                self._post(texts[start : start + self.BATCH_SIZE], is_query=False)
             )
         return vectors
 
     def embed_query(self, text: str) -> list[float]:
-        return self._post([text], "query")[0]
+        return self._post([text], is_query=True)[0]
+
+
+class VoyageEmbeddingProvider(RestEmbeddingProvider):
+    """Voyage AI — MongoDB's embedding provider since their 2025 acquisition.
+
+    Free tier is 200M tokens, but without a payment method on file the rate
+    limit is 3 requests/minute, which is too low for a live demo.
+    """
+
+    provider_name = "voyage"
+    API_URL = "https://api.voyageai.com/v1/embeddings"
+
+    def _payload(self, texts: list[str], is_query: bool) -> dict:
+        return {
+            "input": texts,
+            "model": self._model_name,
+            "input_type": "query" if is_query else "document",
+        }
+
+
+class JinaEmbeddingProvider(RestEmbeddingProvider):
+    """Jina AI. Free tier with a far more usable rate limit than Voyage's.
+
+    `jina-embeddings-v3` is Matryoshka-trained, so `dimensions` can truncate
+    the 1024-wide output without retraining. Left at full width here — the
+    corpus is 61 chunks, so nothing is gained by shrinking it.
+    """
+
+    provider_name = "jina"
+    API_URL = "https://api.jina.ai/v1/embeddings"
+
+    def _payload(self, texts: list[str], is_query: bool) -> dict:
+        return {
+            "input": texts,
+            "model": self._model_name,
+            "task": "retrieval.query" if is_query else "retrieval.passage",
+        }
 
 
 class OpenAIEmbeddingProvider(EmbeddingProvider):
@@ -214,6 +259,11 @@ def build_embedding_provider(settings: Settings | None = None) -> EmbeddingProvi
     """
     settings = settings or get_settings()
 
+    if settings.embedding_provider == "jina":
+        return JinaEmbeddingProvider(
+            api_key=settings.jina_api_key or "",
+            model=settings.jina_embedding_model,
+        )
     if settings.embedding_provider == "voyage":
         return VoyageEmbeddingProvider(
             api_key=settings.voyage_api_key or "",
