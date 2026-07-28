@@ -179,8 +179,26 @@ Atlas cluster.
 **`mongo_connected: false`.** Atlas Network Access is probably blocking Render. Add
 `0.0.0.0/0` to the IP allowlist, or Render's static outbound IPs on a paid plan.
 
-**Frontend shows "Disconnected".** `REACT_APP_API_URL` was missing or wrong at build
-time. Fix it in Vercel and **redeploy** — a restart is not enough.
+**Frontend shows "Disconnected" while `/health` returns healthy.** The bundle was
+built with the wrong API URL. CRA inlines `REACT_APP_API_URL` at **build** time, so
+setting it in Vercel afterwards changes nothing until you redeploy.
+
+Confirm what was actually baked in rather than guessing:
+
+```bash
+curl -s https://your-app.vercel.app | grep -o '/static/js/main[^"]*'
+curl -s https://your-app.vercel.app/static/js/main.<hash>.js \
+  | grep -o 'https://[a-z0-9.-]*onrender[a-z0-9.-]*'
+```
+
+If that prints a placeholder or `localhost`, fix `chat-ui/.env.production` (or the
+Vercel environment variable) and redeploy. The error banner in the app also names
+the URL it tried.
+
+> This bit me: `chat-ui/.env.production` shipped with a placeholder
+> `https://your-backend.onrender.com`, which built cleanly and failed silently at
+> runtime. It now holds the real Render URL, so a build with no dashboard
+> configuration still works.
 
 **Streaming shows nothing, then everything at once.** A proxy is buffering. The app
 sends `X-Accel-Buffering: no`; if you put anything else in front of Render, it needs

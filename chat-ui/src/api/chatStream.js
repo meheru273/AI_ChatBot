@@ -17,6 +17,10 @@ const API_URL = (
   process.env.REACT_APP_API_URL || "http://localhost:8000"
 ).replace(/\/$/, "");
 
+/** The resolved backend origin, surfaced in errors so a misconfigured build is
+ *  diagnosable from the UI rather than only from the bundle. */
+export const apiBaseUrl = API_URL;
+
 export const apiUrl = (path) => `${API_URL}${path}`;
 
 export async function checkHealth(signal) {

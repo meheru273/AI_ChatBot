@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import "./App.css";
-import { streamChat, checkHealth } from "./api/chatStream";
+import { streamChat, checkHealth, apiBaseUrl } from "./api/chatStream";
 
 /** Friendly labels for the tool names the backend streams. */
 const TOOL_LABELS = {
@@ -274,8 +274,9 @@ function App() {
 
       {connectionStatus === "error" && (
         <div className="error-banner">
-          ⚠️ Can't reach the backend. Check that the server is running and that
-          REACT_APP_API_URL is set correctly.
+          ⚠️ Can't reach the backend at <code>{apiBaseUrl}</code>. If that URL looks
+          wrong, set REACT_APP_API_URL and redeploy — it is baked in at build time.
+          On a free instance the first request can take ~50s to wake the server.
         </div>
       )}
     </div>
