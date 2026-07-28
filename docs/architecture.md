@@ -170,31 +170,63 @@ Tools that cannot work say so in their return value, which the model can relay.
 **Rationale.** A service answering half its questions beats one that will not start,
 and the health endpoint makes the degradation legible.
 
-### DR-9 — Model choice, and retrying malformed tool calls
+### DR-9 — Model chosen by measurement, not reputation
 
 **Context.** The project was built on Groq's `Gemma2-9b-It`. Groq has since
 decommissioned it — the API returns `model_decommissioned` — so the original code
-could no longer run at all.
+could not run at all.
 
-**Decision.** `llama-3.3-70b-versatile`, Groq's flagship tool-calling model. Gemma2
-was weak at function calling regardless, and this agent routes across seven tools
-under safety-sensitive rules, so tool-call reliability is the binding constraint.
-
-**The problem this surfaced.** Llama 3.3 intermittently emits its *native* function
-syntax instead of the JSON Groq's parser expects:
+The obvious replacement was `llama-3.3-70b-versatile`, Groq's flagship. It turned out
+to intermittently emit Llama's *native* function syntax instead of the JSON Groq's
+parser expects:
 
 ```
 failed_generation: '<function=search_menu{"query": "bibimbap"}</function>'
 ```
 
-Groq rejects this with `tool_use_failed` and a 400. Note the arguments are correct —
-only the wrapper is wrong. Measured at roughly one failure in three, on both
-streaming and buffered calls, so it is model behaviour rather than a client bug.
+The arguments are correct; only the wrapper is wrong. Groq rejects it with
+`tool_use_failed` and a 400.
 
-**Mitigation.** The agent node retries up to twice on this specific error. Sampling
-temperature is non-zero, so a retry genuinely resamples. Every *other* exception —
-a bad key, a decommissioned model, a rate limit — fails on the first attempt, so a
-permanent fault is never disguised as three slow ones.
+**Measurement.** Rather than guess, all five candidates were run over four
+representative prompts × 3 trials, scoring both parse success and whether the
+*expected* tool was chosen:
+
+| Model | ok | fail | correct routing |
+|---|---|---|---|
+| `openai/gpt-oss-120b` | 12 | 0 | 12/12 |
+| `openai/gpt-oss-20b` | 12 | 0 | 12/12 |
+| `qwen/qwen3.6-27b` | 12 | 0 | 12/12 |
+| `llama-3.3-70b-versatile` | 11 | 1 | 11/12 |
+| `llama-3.1-8b-instant` | 9 | 3 | 9/12 |
+
+**Decision.** `openai/gpt-oss-120b` — perfect on both axes, the largest of the clean
+performers, and verified end to end not to leak its reasoning channel into the token
+stream (a real risk with gpt-oss models, which would have shown up as visible
+thinking in the chat bubble).
+
+Sample size is 12 calls per model, so this separates "clearly broken" from "clearly
+fine" rather than finely ranking the top three.
+
+**Retry retained anyway.** The agent node still retries twice on `tool_use_failed`.
+It costs nothing on a model that does not trigger it, and keeps `llama-3.3` usable
+for anyone who switches. Every *other* exception — bad key, dead model, rate limit —
+fails on the first attempt, so a permanent fault is never disguised as three slow
+ones.
+
+### DR-10 — The prompt owns output formatting
+
+**Context.** `gpt-oss-120b` defaults to rich Markdown: tables, headings, bold.
+
+**Problem.** The chat bubble renders plain text with `<br>` for newlines, so a
+Markdown table arrives as a wall of raw pipes.
+
+**Decision.** Constrain formatting in the system prompt — bullet lines prefixed
+`• `, one dish per line, no tables, headings, code blocks, or emphasis.
+
+**Alternative rejected.** Adding `react-markdown` to the frontend would render the
+tables properly, and is the better answer if the UI grows. For now it is a
+dependency and an XSS surface in exchange for prettier output than a chat bubble
+needs.
 
 ---
 

@@ -26,7 +26,7 @@ So the agent has both paths and chooses.
 chat-ui (React 19)
    │  POST /chat/stream    Server-Sent Events
    ▼
-FastAPI  ──  LangGraph agent  ──▶  ChatGroq (llama-3.3-70b-versatile)
+FastAPI  ──  LangGraph agent  ──▶  ChatGroq (openai/gpt-oss-120b)
                     │
        ┌────────────┼──────────────┬──────────────────┐
        ▼            ▼              ▼                  ▼
@@ -180,6 +180,6 @@ on every cold start.
 
 ## Tech
 
-LangGraph · LangChain · Groq (`llama-3.3-70b-versatile`) · FAISS · Jina / Voyage /
+LangGraph · LangChain · Groq (`openai/gpt-oss-120b`) · FAISS · Jina / Voyage /
 OpenAI / sentence-transformers embeddings · FastAPI · sse-starlette ·
 MongoDB (Motor) · React 19 · pytest
