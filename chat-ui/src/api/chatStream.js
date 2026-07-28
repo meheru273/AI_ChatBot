@@ -35,12 +35,32 @@ export async function checkHealth(signal) {
   return response.json();
 }
 
+/**
+ * Split a buffer into complete SSE frames plus the unterminated remainder.
+ *
+ * The SSE spec allows CR, LF or CRLF as line terminators, and sse-starlette
+ * emits CRLF — so splitting on "\n\n" alone matches nothing and every frame is
+ * silently dropped. Line endings are normalised first.
+ *
+ * Normalising the whole buffer on each pass (rather than on decode) is
+ * deliberate: a chunk can end mid-CRLF, and re-normalising the accumulated
+ * buffer joins that pair back together instead of stranding a lone CR.
+ *
+ * @returns {[string[], string]} complete frames, and the leftover partial
+ */
+export function extractFrames(buffer) {
+  const parts = buffer.replace(/\r\n?/g, "\n").split("\n\n");
+  const remainder = parts.pop() ?? "";
+  return [parts.filter((f) => f.trim() !== ""), remainder];
+}
+
 /** Split one SSE frame into its event name and parsed payload. */
-function parseFrame(frame) {
+export function parseFrame(frame) {
   let event = "message";
   const dataLines = [];
 
-  for (const line of frame.split("\n")) {
+  for (const raw of frame.split("\n")) {
+    const line = raw.replace(/\r$/, "");
     if (line.startsWith(":")) continue; // keep-alive comment
     if (line.startsWith("event:")) {
       event = line.slice("event:".length).trim();
@@ -106,10 +126,10 @@ export async function streamChat({
 
       buffer += decoder.decode(value, { stream: true });
 
-      // A blank line terminates a frame. The trailing element is retained
-      // because it may be a partial frame still arriving.
-      const frames = buffer.split("\n\n");
-      buffer = frames.pop() ?? "";
+      // A blank line terminates a frame; the remainder may be a partial frame
+      // still arriving, so it is carried into the next read.
+      const [frames, remainder] = extractFrames(buffer);
+      buffer = remainder;
 
       for (const rawFrame of frames) {
         const parsed = parseFrame(rawFrame);

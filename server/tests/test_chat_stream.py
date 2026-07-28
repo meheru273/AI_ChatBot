@@ -27,6 +27,26 @@ async def test_stream_returns_event_stream_content_type(client):
         await collect_sse(response)
 
 
+async def test_raw_wire_format_uses_crlf_frame_separators(client):
+    """Pin the byte-level framing the browser client has to parse.
+
+    Every other test here reads through `aiter_lines`, which normalises line
+    endings — that hid a client bug where frames were split on "\\n\\n" while
+    sse-starlette emits CRLF, so the browser parsed zero events and the stream
+    looked like it had closed empty.
+    """
+    http, holder = client
+    holder["graph"] = FakeGraph(tokens=["a", "b"])
+
+    async with http, http.stream("POST", STREAM_URL, json=ONE_TURN) as response:
+        raw = b"".join([chunk async for chunk in response.aiter_raw()])
+
+    assert b"\r\n\r\n" in raw, "frames must be CRLF-separated"
+    assert raw.startswith(b"event: token\r\ndata: ")
+    # The bug in one line: a client splitting on a bare LF pair finds nothing.
+    assert b"\n\n" not in raw
+
+
 async def test_tokens_reassemble_into_the_final_message(client):
     http, holder = client
     holder["graph"] = FakeGraph(tokens=["Bibim", "bap is ", "mixed rice."])
