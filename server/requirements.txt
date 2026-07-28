@@ -20,9 +20,6 @@ langchain-openai          # only used when EMBEDDING_PROVIDER=openai
 motor
 pymongo
 
-# ---- External knowledge tools ----
-wikipedia
-arxiv
 
 # ---- Utilities ----
 python-dotenv

@@ -115,9 +115,28 @@ async def test_upstream_failure_surfaces_as_error_event(client):
     names = event_names(events)
     assert names[-1] == "error"
     assert "done" not in names
-    assert "exploded" in events_of(events, "error")[0]["message"]
+    assert events_of(events, "error")[0]["message"]
     # Whatever streamed before the failure is still delivered.
     assert [t["content"] for t in events_of(events, "token")] == ["a"]
+
+
+async def test_rate_limiting_mid_stream_is_reported_as_such(client):
+    """The free tier's token-per-minute cap is transient, so the message says
+    so rather than reading like a permanent failure."""
+    http, holder = client
+
+    class RateLimited:
+        async def astream_events(self, state, config=None, version="v2"):
+            raise RuntimeError("Error code: 429 - rate_limit_exceeded (TPM)")
+            yield  # pragma: no cover - makes this an async generator
+
+    holder["graph"] = RateLimited()
+
+    async with http, http.stream("POST", STREAM_URL, json=ONE_TURN) as response:
+        events = await collect_sse(response)
+
+    assert event_names(events)[-1] == "error"
+    assert "rate limit" in events_of(events, "error")[0]["message"].lower()
 
 
 async def test_conversation_history_reaches_the_agent(client):

@@ -30,8 +30,8 @@ FastAPI  ──  LangGraph agent  ──▶  ChatGroq (openai/gpt-oss-120b)
                     │
        ┌────────────┼──────────────┬──────────────────┐
        ▼            ▼              ▼                  ▼
-  search_menu   filter_menu   search_knowledge   wikipedia / arxiv
-  list_categories             (FAISS + embeddings)
+  search_menu   filter_menu   search_knowledge   web_search / read_webpage
+  list_categories             (FAISS + embeddings)   (Jina search + reader)
   restaurant_info
        │                           │
        ▼                           ▼
@@ -105,8 +105,8 @@ The API URL comes from `REACT_APP_API_URL` (`chat-ui/.env.development`,
 ### Tests
 
 ```bash
-cd server && pytest        # 115 tests
-cd chat-ui && npm test
+cd server && pytest        # 142 tests
+cd chat-ui && npm test     # 17 tests
 ```
 
 ---
@@ -154,7 +154,7 @@ server/
   app/
     api/routes/     chat.py (SSE), health.py
     agent/          graph.py, prompts.py, llm.py, state.py
-    tools/          menu.py, knowledge.py, external.py
+    tools/          menu.py, knowledge.py, web.py
     rag/            embeddings.py, vectorstore.py, documents.py, chunking.py, ingest.py
     db/             mongo.py, models.py, repository.py
     config.py       all environment variables, declared once

@@ -59,6 +59,14 @@ class Settings(BaseSettings):
     # The Banchan menu-service database, holding menuitems/categories/restaurants.
     mongo_db: str = "menu"
 
+    # ---- Web access (Jina search + reader, reusing JINA_API_KEY) ----
+    # A single search returns eight results of ~30k characters; these caps keep
+    # the model's context available for the restaurant's own data.
+    web_search_enabled: bool = True
+    web_search_results: int = 3
+    web_snippet_max_chars: int = 600
+    web_page_max_chars: int = 4000
+
     # ---- Retrieval ----
     faiss_index_path: Path = SERVER_ROOT / "data" / "index"
     knowledge_path: Path = SERVER_ROOT / "data" / "knowledge"

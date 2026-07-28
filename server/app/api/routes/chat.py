@@ -43,6 +43,27 @@ EVENT_DONE = "done"
 EVENT_ERROR = "error"
 
 
+def classify_error(exc: Exception) -> tuple[int, str]:
+    """Map an agent failure onto a status and a message worth showing a user.
+
+    Rate limiting is common on Groq's free tier — the token-per-minute budget
+    is easily reached once web content joins the prompt — and it is transient,
+    so it earns a distinct, actionable message rather than a generic failure.
+    """
+    text = str(exc).lower()
+
+    if "rate_limit" in text or "rate limit" in text or "429" in text:
+        return 429, (
+            "I'm briefly over my rate limit. Give me a few seconds and ask again."
+        )
+    if "model_decommissioned" in text or "does not exist" in text:
+        return 503, "The language model is unavailable. Please try again later."
+    if "invalid api key" in text or "401" in text:
+        return 503, "The assistant is misconfigured and cannot answer right now."
+
+    return 500, "Something went wrong while answering. Please try again."
+
+
 def _prepare(request: ChatRequest) -> list:
     if request.last_user_message() is None:
         raise HTTPException(status_code=422, detail="No user message in request")
@@ -64,7 +85,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
         )
     except Exception as exc:
         logger.exception("Agent invocation failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        status, message = classify_error(exc)
+        raise HTTPException(status_code=status, detail=message) from exc
 
     final = result["messages"][-1]
     content = getattr(final, "content", None)
@@ -132,9 +154,10 @@ async def chat_stream(request: ChatRequest, http_request: Request) -> EventSourc
 
         except Exception as exc:  # noqa: BLE001 - must surface inside the stream
             logger.exception("Streaming agent failed")
+            _, message = classify_error(exc)
             yield {
                 "event": EVENT_ERROR,
-                "data": json.dumps({"message": str(exc)}),
+                "data": json.dumps({"message": message}),
             }
 
     return EventSourceResponse(

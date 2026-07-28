@@ -24,6 +24,8 @@ os.environ.setdefault("MONGO_URI", "mongodb://localhost:27017/test")
 os.environ.setdefault("MONGO_DB", "test")
 os.environ.setdefault("EMBEDDING_PROVIDER", "local")  # never actually constructed
 os.environ.setdefault("RETRIEVAL_TOP_K", "3")
+# Registers the web tools; no request is ever made with it.
+os.environ.setdefault("JINA_API_KEY", "test-jina-key")
 
 from app.rag.chunking import Chunk  # noqa: E402
 from app.rag.embeddings import EmbeddingProvider  # noqa: E402

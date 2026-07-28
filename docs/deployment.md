@@ -75,7 +75,7 @@ rewrite is incompatible and should be re-cloned rather than pulled.
 | Variable | Value |
 |---|---|
 | `GROQ_API_KEY` | your rotated Groq key |
-| `JINA_API_KEY` | the `jina_...` key from step 0 |
+| `JINA_API_KEY` | the `jina_...` key from step 0 (powers embeddings *and* web search) |
 | `MONGODB_URI` | your Atlas connection string |
 | `CORS_ORIGINS` | leave as `http://localhost:3000` for now; corrected in step 4 |
 

@@ -47,7 +47,7 @@ async def test_chat_reports_agent_failure_as_500(client, monkeypatch):
 
     class ExplodingGraph:
         async def ainvoke(self, state, config=None):
-            raise RuntimeError("model unavailable")
+            raise RuntimeError("something obscure broke")
 
     holder["graph"] = ExplodingGraph()
 
@@ -57,6 +57,40 @@ async def test_chat_reports_agent_failure_as_500(client, monkeypatch):
         )
 
     assert response.status_code == 500
+    # Internal detail must not leak to the user.
+    assert "obscure" not in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    ("raised", "status", "expected_text"),
+    [
+        ("Error code: 429 - rate_limit_exceeded on tokens per minute", 429, "rate limit"),
+        ("model_decommissioned: gemma2-9b-it is no longer supported", 503, "unavailable"),
+        ("Error code: 401 - Invalid API Key", 503, "misconfigured"),
+        ("some unmapped failure", 500, "went wrong"),
+    ],
+    ids=["rate-limit", "dead-model", "bad-key", "unknown"],
+)
+async def test_chat_maps_failures_to_useful_messages(
+    client, raised, status, expected_text
+):
+    """Groq's free tier hits its token-per-minute cap easily once web content
+    joins the prompt, so that case earns an actionable message."""
+    http, holder = client
+
+    class Failing:
+        async def ainvoke(self, state, config=None):
+            raise RuntimeError(raised)
+
+    holder["graph"] = Failing()
+
+    async with http:
+        response = await http.post(
+            "/chat", json={"messages": [{"role": "user", "content": "hi"}]}
+        )
+
+    assert response.status_code == status
+    assert expected_text in response.json()["detail"].lower()
 
 
 @pytest.mark.parametrize(
