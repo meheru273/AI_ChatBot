@@ -6,12 +6,15 @@ Import `get_settings()` rather than touching `os.environ` directly.
 
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 SERVER_ROOT = Path(__file__).resolve().parent.parent
 REPO_ROOT = SERVER_ROOT.parent
@@ -70,8 +73,33 @@ class Settings(BaseSettings):
 
     @property
     def allowed_origins(self) -> list[str]:
-        """CORS origins as a list. `*` stays a single wildcard entry."""
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        """CORS origins as a list, normalised.
+
+        The browser's `Origin` header is always scheme + host + port and never
+        has a trailing slash, so `banchan-rag-app.vercel.app` or
+        `https://example.com/` match nothing and every request fails CORS while
+        the backend looks perfectly healthy. Both slips are common enough to be
+        worth repairing here, loudly.
+        """
+        origins: list[str] = []
+
+        for raw in self.cors_origins.split(","):
+            origin = raw.strip().rstrip("/")
+            if not origin:
+                continue
+
+            if origin != "*" and "://" not in origin:
+                logger.warning(
+                    "CORS origin %r has no scheme; assuming https://%s. "
+                    "Set the full origin to silence this.",
+                    origin,
+                    origin,
+                )
+                origin = f"https://{origin}"
+
+            origins.append(origin)
+
+        return origins
 
     @model_validator(mode="after")
     def _require_key_for_hosted_provider(self) -> Settings:

@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 # Published dimensions, so the common paths never spend a probe request.
 # Unlisted models are measured once on first use.
 _KNOWN_DIMENSIONS = {
+    "voyage-3-lite": 512,
     "text-embedding-3-small": 1536,
     "text-embedding-3-large": 3072,
     "text-embedding-ada-002": 1536,
