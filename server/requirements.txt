@@ -1,0 +1,35 @@
+# ---- Web framework ----
+fastapi
+uvicorn[standard]
+sse-starlette
+pydantic
+pydantic-settings
+
+# ---- Agent orchestration ----
+langchain
+langchain-core
+langchain-community
+langgraph
+langchain-groq
+
+# ---- Retrieval ----
+faiss-cpu
+langchain-openai          # only used when EMBEDDING_PROVIDER=openai
+
+# ---- Database ----
+motor
+pymongo
+
+# ---- External knowledge tools ----
+wikipedia
+arxiv
+
+# ---- Utilities ----
+python-dotenv
+httpx
+
+# ---- Local embeddings (optional) ----
+# Only needed when EMBEDDING_PROVIDER=local. Pulls in torch (~2GB) and will
+# not fit in a Vercel serverless function. Imported lazily, so an OpenAI-only
+# deployment can leave this uninstalled.
+# sentence-transformers

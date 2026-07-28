@@ -1,0 +1,58 @@
+# Render blueprint for the backend.
+#
+# The frontend is deployed separately on Vercel (see chat-ui/vercel.json).
+# After the first deploy, set CORS_ORIGINS here to the Vercel URL, and set
+# REACT_APP_API_URL on Vercel to this service's URL.
+#
+# Note on the free plan: instances sleep after 15 minutes of inactivity and
+# take roughly 50 seconds to wake. For a demo link on a CV that is a poor first
+# impression — either keep it warm with an external pinger against /health, or
+# use the paid Starter plan.
+
+services:
+  - type: web
+    name: banchan-rag-assistant
+    runtime: python
+    plan: free
+    region: frankfurt
+    rootDir: server
+    # The index is built at deploy time, not on first request: embedding the
+    # corpus takes seconds and must not sit in the user's latency path.
+    buildCommand: pip install -r requirements.txt && python -m scripts.build_index
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.3"
+
+      # ---- LLM ----
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: Gemma2-9b-It
+
+      # ---- Embeddings ----
+      # Hosted, because sentence-transformers needs torch and the free plan
+      # has 512 MB of RAM.
+      - key: EMBEDDING_PROVIDER
+        value: voyage
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: VOYAGE_EMBEDDING_MODEL
+        value: voyage-3-lite
+
+      # ---- Database ----
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGO_DB
+        value: menu
+
+      # ---- Retrieval ----
+      - key: RETRIEVAL_TOP_K
+        value: "4"
+
+      # ---- CORS ----
+      # Set to the deployed Vercel origin, e.g.
+      # https://banchan-assistant.vercel.app
+      - key: CORS_ORIGINS
+        sync: false

@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: server/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio ruff
+
+      - name: Lint
+        run: ruff check app tests scripts
+
+      - name: Test
+        # The suite fakes the LLM, embeddings and database, so no secrets are
+        # needed; these values only satisfy Settings validation at import.
+        env:
+          GROQ_API_KEY: test-key
+          MONGO_URI: mongodb://localhost:27017/test
+          EMBEDDING_PROVIDER: local
+        run: pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: chat-ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: chat-ui/package-lock.json
+
+      - run: npm ci
+
+      - name: Test
+        run: npm test -- --watchAll=false
+
+      - name: Build
+        run: npm run build
